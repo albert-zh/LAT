@@ -24,5 +24,5 @@ link_libraries("LLVM-10")
 add_compile_options(-std=c++14 --save-temps -fno-rtti -fno-exceptions -g -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
 
 # 编译源码生成目标
-add_executable(LAT init.cpp)
+add_executable(LAT init.cpp FunctionCallPass.cpp SelectionCountPass.cpp LoopCountPass.cpp FunctionNamePass.cpp)
 

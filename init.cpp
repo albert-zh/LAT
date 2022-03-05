@@ -1,15 +1,12 @@
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Dominators.h>
-#include <llvm/Pass.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/prettywriter.h>
+#include <FunctionAnalysisBase.h>
+#include <PassDefinitions.h>
 #include <iostream>
 
 // using namespace std;
@@ -42,66 +39,6 @@ static cl::opt<bool> DisableFunctionName("disable-function-name", cl::Hidden,
                                         cl::desc("Disable callee count anslysis"),
                                         cl::init(false));
 
-class FunctionAnalysisBase {
-public:
-    virtual bool run(Function& F) {
-        return false;
-    }
-    virtual void getResult(PrettyWriter<StringBuffer>& writer) {}
-};
-
-class FunctionCallPass : public FunctionAnalysisBase {
-private:
-    std::vector<std::string> callees;
-    static char ID;
-
-public:
-    bool run(Function& F) override {
-        for (BasicBlock &BB : F) {
-            for (Instruction &I : BB) {
-                if (CallInst *CallI = static_cast<CallInst*>(&I)) {
-                    if (CallI->getCalledFunction())
-                        callees.push_back(CallI->getCalledFunction()->getName().str());
-                }
-            }
-        }
-        return true;
-    }
-
-    void getResult(PrettyWriter<StringBuffer>& writer) override {
-        writer.Key("called_function");
-        writer.StartArray();
-        for (auto callee : callees) {
-            writer.String(callee.c_str());
-        }
-        writer.EndArray();
-    }
-
-};
-
-class SelectionCountPass : public FunctionAnalysisBase {
-private:
-    int SelectionCount;
-    static char ID;
-
-public:
-    bool run(Function& F) override {
-        for (BasicBlock &BB : F) {
-            if (!BB.getSingleSuccessor()) {
-                SelectionCount++;
-            }
-        }
-        return true;
-    }
-
-    void getResult(PrettyWriter<StringBuffer>& writer) override {
-        writer.Key("selection_num");
-        writer.Int(SelectionCount);
-    }
-
-    SelectionCountPass() : SelectionCount(0) {}
-};
-
 class FunctionNamePass : public FunctionAnalysisBase {
 
 private:
@@ -118,31 +55,6 @@ public:
         writer.String(name.c_str());
     }
 
-};
-
-class LoopCountPass : public FunctionAnalysisBase {
-private:
-    int LoopCount;
-    LoopInfoBase<llvm::BasicBlock, llvm::Loop>* loopInfo;
-
-public:
-    bool run(Function& F) override {
-        DominatorTree* DT = new DominatorTree();
-        DT->recalculate(F);
-        loopInfo->releaseMemory();
-        loopInfo->analyze(*DT);
-        LoopCount = loopInfo->getLoopsInPreorder().size();
-        return true;
-    }
-
-    void getResult(PrettyWriter<StringBuffer>& writer) override {
-        writer.Key("repetition_num");
-        writer.Int(LoopCount);
-    }
-
-    LoopCountPass() : LoopCount(0)  {
-        loopInfo = new LoopInfoBase<llvm::BasicBlock, llvm::Loop>();
-    }
 };
 
 class BasicBlockCountPass : public FunctionAnalysisBase {
