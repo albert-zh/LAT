@@ -22,6 +22,26 @@ static ManagedStatic<LLVMContext> GlobalContext;
 // 命令行位置参数全局变量, 这个参数的含义是需要处理的LLVM IR字节码的文件名
 static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::Required);
 
+static cl::opt<bool> EnableCalleeCount("enable-callee-count", cl::Hidden,
+                                        cl::desc("Enable callee count anslysis"),
+                                        cl::init(false));
+
+static cl::opt<bool> EnableBranchCount("enable-branch-count", cl::Hidden,
+                                        cl::desc("Enable callee count anslysis"),
+                                        cl::init(false));
+
+static cl::opt<bool> EnableLoopCount("enable-loop-count", cl::Hidden,
+                                        cl::desc("Enable callee count anslysis"),
+                                        cl::init(false));
+
+static cl::opt<bool> EnableBBCount("enable-BB-count", cl::Hidden,
+                                        cl::desc("Enable callee count anslysis"),
+                                        cl::init(false));
+
+static cl::opt<bool> EnableFunctionName("enable-function-name", cl::Hidden,
+                                        cl::desc("Enable callee count anslysis"),
+                                        cl::init(false));
+
 class FunctionAnalysisBase {
 public:
     virtual bool run(Function& F) {
@@ -80,6 +100,24 @@ public:
     }
 
     SelectionCountPass() : SelectionCount(0) {}
+};
+
+class FunctionNamePass : public FunctionAnalysisBase {
+
+private:
+    std::string name;
+
+public:
+    bool run(Function& F) override {
+        name = F.getName().str();
+        return true;
+    }
+
+    void getResult(PrettyWriter<StringBuffer>& writer) override {
+        writer.Key("function_name");
+        writer.String(name.c_str());
+    }
+
 };
 
 class LoopCountPass : public FunctionAnalysisBase {
@@ -157,11 +195,12 @@ public:
         for (Function &F : *M) {
             if (!F.isIntrinsic()) {
                 // get function name 
+                FunctionAnalysisBase* Analysis = new FunctionNamePass();
                 writer->Key("function_name");
                 writer->String(F.getName().str().c_str());
 
                 // get called function
-                FunctionAnalysisBase* Analysis = new FunctionCallPass();
+                Analysis = new FunctionCallPass();
                 Analysis->run(F);
                 Analysis->getResult(*writer);
 
@@ -199,25 +238,15 @@ public:
 
 int main(int argc, char **argv) {
     //  initialize 
-    SMDiagnostic Err;
     cl::ParseCommandLineOptions(argc, argv);
-    // StringRef s = InputFilename;
-    // std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
-    // StringBuffer strbuf;
-    // PrettyWriter<StringBuffer> writer(strbuf);
-
-    // std::vector<FunctionAnalysisBase*> analysis;
-    // analysis.push_back(new FunctionCallPass());
 
     ModuleAnalysis moduleAnalysis;
-    moduleAnalysis.init();
-    // moduleAnalysis.startFile();
+    if (!moduleAnalysis.init()) {
+        outs() << "Error: Fail to open ir file! \n";
+        return 1;
+    }
+        
     moduleAnalysis.analyze();
-    // moduleAnalysis.endFile();
     moduleAnalysis.emitResult();
-
-    
-
-    // std::cout<<strbuf.GetString()<<std::endl;
 
 }
