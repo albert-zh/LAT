@@ -4,9 +4,17 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Analysis/LoopInfo.h>
+#include <llvm/IR/Dominators.h>
+#include <llvm/Pass.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+#include <iostream>
 
 // using namespace std;
 using namespace llvm;
+using namespace rapidjson;
 
 // LLVM上下文全局变量
 static ManagedStatic<LLVMContext> GlobalContext;
@@ -14,36 +22,85 @@ static ManagedStatic<LLVMContext> GlobalContext;
 // 命令行位置参数全局变量, 这个参数的含义是需要处理的LLVM IR字节码的文件名
 static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::Required);
 
+// class WriterWrapper {
+// private:
+//     static StringBuffer strbuf;
+//     static Writer<StringBuffer> Writer;
+// public
+    
+// }
+
+class AnalysisBase {
+public:
+    virtual bool run(Function& F);
+    virtual bool run(BasicBlock& BB);
+    virtual bool run(Module& M);
+    virtual void getResult(Writer<StringBuffer>& Writer);
+};
+
+class FunctionCallPass : public AnalysisBase {
+private:
+    std::vector<std::string> callees;
+    static char ID;
+
+public:
+    bool run(Function& F) override {
+        for (BasicBlock &BB : F) {
+            for (Instruction &I : BB) {
+                if (CallInst *CallI = static_cast<CallInst*>(&I)) {
+                    callees.push_back(CallI->getCalledFunction()->getName().str());
+                }
+            }
+        }
+    }
+
+    void getResult(Writer<StringBuffer>& writer) override {
+        writer.Key("called_function");
+        writer.StartArray();
+        for (auto callee : callees) {
+            writer.String(callee.c_str());
+        }
+        writer.EndArray();
+    }
+
+};
+
 int main(int argc, char **argv) {
-
+    //  initialize 
     SMDiagnostic Err;
-    // 格式化命令行参数,
     cl::ParseCommandLineOptions(argc, argv);
-
     std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
-    // 错误处理
+    StringBuffer strbuf;
+    Writer<StringBuffer> writer(strbuf);
     if (!M) {
         Err.print(argv[0], errs());
         return 1;
     }
-    // 遍历Module中的每一个Function
-    for (Function &F:*M) {
-        // 过滤掉那些以llvm.开头的无关函数
+
+    std::vector<AnalysisBase*> analysis;
+    analysis.push_back(new FunctionCallPass());
+
+    for (Function &F : *M) {
         if (!F.isIntrinsic()) {
-            // 打印函数返回类型
-            outs() << *(F.getReturnType());
-            // 打印函数名
-            outs() << ' ' << F.getName() << '(';
-            // 遍历函数的每一个参数
-            for (Function::arg_iterator it = F.arg_begin(), ie = F.arg_end(); it != ie; it++) {
-                // 打印参数类型
-                outs() << *(it->getType());
-                if (it != ie - 1) {
-                    outs() << ", ";
-                }
-            }
-            outs() << ")\n";
+            // get function name 
+            writer.Key("function_name");
+            writer.String(F.getName().str().c_str());
+
+            // get called function
+            AnalysisBase* Analysis = new FunctionCallPass();
+            Analysis->run(F);
+            Analysis->getResult(writer);
+
+            DominatorTree *DT = new DominatorTree(F);
+            DT->recalculate(F);
+            
+            LoopInfoBase<BasicBlock, Loop>* loopInfo = new LoopInfoBase<BasicBlock, Loop>();
+            loopInfo->analyze(*DT);
+            loopInfo->getLoopsInPreorder().size();
         }
     }
+    writer.EndArray();
+
+    std::cout<<strbuf.GetString()<<std::endl;
 
 }
