@@ -3,3 +3,4 @@
 #include <SelectionCountPass.h>
 #include <LoopCountPass.h>
 #include <FunctionNamePass.h>
+#include <BasicBlockCountPass.h>
