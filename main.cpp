@@ -58,8 +58,6 @@ int main(int argc, char **argv) {
         fileName = InputFilename.substr(0, InputFilename.length() - 2).append(".ll");
     }
 
-    
-
     std::unique_ptr<Module> M = parseIRFile(fileName, Err, *GlobalContext);
     if (!M) {
         outs() << "Error: Fail to open ir file! \n";
