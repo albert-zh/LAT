@@ -126,61 +126,98 @@ public:
     BasicBlockCountPass() : BBCount(0) {}
 };
 
+class ModuleAnalysis {
+private:
+    StringBuffer strbuf;
+    SMDiagnostic Err;
+    std::unique_ptr<Module> M;
+    PrettyWriter<StringBuffer> *writer;
+
+public:
+    bool init() {
+        M = parseIRFile(InputFilename, Err, *GlobalContext);
+        if (!M) {
+            return false;
+        }
+        writer = new PrettyWriter<StringBuffer>(strbuf);
+        return true;
+    }
+
+    void startFile() {
+        writer->StartObject();
+        writer->Key("function_num");
+        writer->Int(M->size());
+        writer->Key("function_summary");
+        writer->StartArray();
+        writer->StartObject();
+    }
+
+    bool analyze() {
+        startFile();
+        for (Function &F : *M) {
+            if (!F.isIntrinsic()) {
+                // get function name 
+                writer->Key("function_name");
+                writer->String(F.getName().str().c_str());
+
+                // get called function
+                FunctionAnalysisBase* Analysis = new FunctionCallPass();
+                Analysis->run(F);
+                Analysis->getResult(*writer);
+
+                // get selection_num
+                Analysis = new SelectionCountPass();
+                Analysis->run(F);
+                Analysis->getResult(*writer);
+
+                // get repetition_num
+                Analysis = new LoopCountPass();
+                Analysis->run(F);
+                Analysis->getResult(*writer);
+
+                // get sequence_num
+                Analysis = new BasicBlockCountPass();
+                Analysis->run(F);
+                Analysis->getResult(*writer);
+                
+            }
+        }
+        endFile();
+        return true;
+    }
+
+    void endFile() {
+        writer->EndObject();
+        writer->EndArray();
+        writer->EndObject();
+    }
+
+    void emitResult() {
+        std::cout<< strbuf.GetString() <<std::endl;
+    }
+};
+
 int main(int argc, char **argv) {
     //  initialize 
     SMDiagnostic Err;
     cl::ParseCommandLineOptions(argc, argv);
-    std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
-    StringBuffer strbuf;
-    PrettyWriter<StringBuffer> writer(strbuf);
+    // StringRef s = InputFilename;
+    // std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
+    // StringBuffer strbuf;
+    // PrettyWriter<StringBuffer> writer(strbuf);
 
-    if (!M) {
-        Err.print(argv[0], errs());
-        return 1;
-    }
+    // std::vector<FunctionAnalysisBase*> analysis;
+    // analysis.push_back(new FunctionCallPass());
 
-    std::vector<FunctionAnalysisBase*> analysis;
-    analysis.push_back(new FunctionCallPass());
+    ModuleAnalysis moduleAnalysis;
+    moduleAnalysis.init();
+    // moduleAnalysis.startFile();
+    moduleAnalysis.analyze();
+    // moduleAnalysis.endFile();
+    moduleAnalysis.emitResult();
 
-    writer.StartObject();
-    writer.Key("function_num");
-    writer.Int(M->size());
-    writer.Key("function_summary");
-    writer.StartArray();
-    writer.StartObject();
+    
 
-    for (Function &F : *M) {
-        if (!F.isIntrinsic()) {
-            // get function name 
-            writer.Key("function_name");
-            writer.String(F.getName().str().c_str());
-
-            // get called function
-            FunctionAnalysisBase* Analysis = new FunctionCallPass();
-            Analysis->run(F);
-            Analysis->getResult(writer);
-
-            // get selection_num
-            Analysis = new SelectionCountPass();
-            Analysis->run(F);
-            Analysis->getResult(writer);
-
-            // get repetition_num
-            Analysis = new LoopCountPass();
-            Analysis->run(F);
-            Analysis->getResult(writer);
-
-            // get sequence_num
-            Analysis = new BasicBlockCountPass();
-            Analysis->run(F);
-            Analysis->getResult(writer);
-            
-        }
-    }
-    writer.EndObject();
-    writer.EndArray();
-    writer.EndObject();
-
-    std::cout<<strbuf.GetString()<<std::endl;
+    // std::cout<<strbuf.GetString()<<std::endl;
 
 }
