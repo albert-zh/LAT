@@ -6,6 +6,7 @@
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Dominators.h>
 #include <FunctionAnalysisBase.h>
+#include <stdlib.h>
 #include <PassDefinitions.h>
 #include <ModuleAnalysis.h>
 #include <iostream>
@@ -44,7 +45,22 @@ int main(int argc, char **argv) {
     //  parse arguments
     cl::ParseCommandLineOptions(argc, argv);
     SMDiagnostic Err;
-    std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
+    std::string fileName;
+
+    if (InputFileFormat.compare("C") == 0) {
+        std::string command("clang -S -emit-llvm " );
+        command.append(InputFilename);
+        int returnvalue = system(command.c_str());
+        if (returnvalue) {
+            outs() << "Error: Fail to open c file! \n";
+            return returnvalue;
+        }
+        fileName = InputFilename.substr(0, InputFilename.length() - 2).append(".ll");
+    }
+
+    
+
+    std::unique_ptr<Module> M = parseIRFile(fileName, Err, *GlobalContext);
     if (!M) {
         outs() << "Error: Fail to open ir file! \n";
         return 1;
