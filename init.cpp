@@ -9,7 +9,7 @@
 #include <llvm/Pass.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
+#include <rapidjson/prettywriter.h>
 #include <iostream>
 
 // using namespace std;
@@ -22,23 +22,15 @@ static ManagedStatic<LLVMContext> GlobalContext;
 // 命令行位置参数全局变量, 这个参数的含义是需要处理的LLVM IR字节码的文件名
 static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::Required);
 
-// class WriterWrapper {
-// private:
-//     static StringBuffer strbuf;
-//     static Writer<StringBuffer> Writer;
-// public
-    
-// }
-
-class AnalysisBase {
+class FunctionAnalysisBase {
 public:
-    virtual bool run(Function& F);
-    virtual bool run(BasicBlock& BB);
-    virtual bool run(Module& M);
-    virtual void getResult(Writer<StringBuffer>& Writer);
+    virtual bool run(Function& F) {
+        return false;
+    }
+    virtual void getResult(PrettyWriter<StringBuffer>& writer) {}
 };
 
-class FunctionCallPass : public AnalysisBase {
+class FunctionCallPass : public FunctionAnalysisBase {
 private:
     std::vector<std::string> callees;
     static char ID;
@@ -48,13 +40,15 @@ public:
         for (BasicBlock &BB : F) {
             for (Instruction &I : BB) {
                 if (CallInst *CallI = static_cast<CallInst*>(&I)) {
-                    callees.push_back(CallI->getCalledFunction()->getName().str());
+                    if (CallI->getCalledFunction())
+                        callees.push_back(CallI->getCalledFunction()->getName().str());
                 }
             }
         }
+        return true;
     }
 
-    void getResult(Writer<StringBuffer>& writer) override {
+    void getResult(PrettyWriter<StringBuffer>& writer) override {
         writer.Key("called_function");
         writer.StartArray();
         for (auto callee : callees) {
@@ -65,20 +59,95 @@ public:
 
 };
 
+class SelectionCountPass : public FunctionAnalysisBase {
+private:
+    int SelectionCount;
+    static char ID;
+
+public:
+    bool run(Function& F) override {
+        for (BasicBlock &BB : F) {
+            if (!BB.getSingleSuccessor()) {
+                SelectionCount++;
+            }
+        }
+        return true;
+    }
+
+    void getResult(PrettyWriter<StringBuffer>& writer) override {
+        writer.Key("selection_num");
+        writer.Int(SelectionCount);
+    }
+
+    SelectionCountPass() : SelectionCount(0) {}
+};
+
+class LoopCountPass : public FunctionAnalysisBase {
+private:
+    int LoopCount;
+    LoopInfoBase<llvm::BasicBlock, llvm::Loop>* loopInfo;
+
+public:
+    bool run(Function& F) override {
+        DominatorTree* DT = new DominatorTree();
+        DT->recalculate(F);
+        loopInfo->releaseMemory();
+        loopInfo->analyze(*DT);
+        LoopCount = loopInfo->getLoopsInPreorder().size();
+        return true;
+    }
+
+    void getResult(PrettyWriter<StringBuffer>& writer) override {
+        writer.Key("repetition_num");
+        writer.Int(LoopCount);
+    }
+
+    LoopCountPass() : LoopCount(0)  {
+        loopInfo = new LoopInfoBase<llvm::BasicBlock, llvm::Loop>();
+    }
+};
+
+class BasicBlockCountPass : public FunctionAnalysisBase {
+private:
+    int BBCount;
+    static char ID;
+
+public:
+    bool run(Function& F) override {
+        BBCount = F.size();
+        return true;
+    }
+
+    void getResult(PrettyWriter<StringBuffer>& writer) override {
+        writer.Key("sequence_num");
+        writer.Int(BBCount);
+    }
+
+    BasicBlockCountPass() : BBCount(0) {}
+};
+
 int main(int argc, char **argv) {
     //  initialize 
     SMDiagnostic Err;
     cl::ParseCommandLineOptions(argc, argv);
     std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, *GlobalContext);
     StringBuffer strbuf;
-    Writer<StringBuffer> writer(strbuf);
+    PrettyWriter<StringBuffer> writer(strbuf);
+
     if (!M) {
         Err.print(argv[0], errs());
         return 1;
     }
 
-    std::vector<AnalysisBase*> analysis;
+    std::vector<FunctionAnalysisBase*> analysis;
     analysis.push_back(new FunctionCallPass());
+
+    writer.StartObject();
+    writer.Key("function_num");
+    writer.Int(M->size());
+    writer.Key("function_summary");
+    writer.StartArray();
+    writer.StartObject();
 
     for (Function &F : *M) {
         if (!F.isIntrinsic()) {
@@ -87,19 +156,30 @@ int main(int argc, char **argv) {
             writer.String(F.getName().str().c_str());
 
             // get called function
-            AnalysisBase* Analysis = new FunctionCallPass();
+            FunctionAnalysisBase* Analysis = new FunctionCallPass();
             Analysis->run(F);
             Analysis->getResult(writer);
 
-            DominatorTree *DT = new DominatorTree(F);
-            DT->recalculate(F);
+            // get selection_num
+            Analysis = new SelectionCountPass();
+            Analysis->run(F);
+            Analysis->getResult(writer);
+
+            // get repetition_num
+            Analysis = new LoopCountPass();
+            Analysis->run(F);
+            Analysis->getResult(writer);
+
+            // get sequence_num
+            Analysis = new BasicBlockCountPass();
+            Analysis->run(F);
+            Analysis->getResult(writer);
             
-            LoopInfoBase<BasicBlock, Loop>* loopInfo = new LoopInfoBase<BasicBlock, Loop>();
-            loopInfo->analyze(*DT);
-            loopInfo->getLoopsInPreorder().size();
         }
     }
+    writer.EndObject();
     writer.EndArray();
+    writer.EndObject();
 
     std::cout<<strbuf.GetString()<<std::endl;
 
