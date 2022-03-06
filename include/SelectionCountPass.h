@@ -9,4 +9,5 @@ private:
 public:
     bool run(llvm::Function& F) override ;
     void getResult(rapidjson::PrettyWriter<rapidjson::StringBuffer>& writer) override;
+    SelectionCountPass() : SelectionCount(0) {}
 };

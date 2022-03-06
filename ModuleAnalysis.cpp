@@ -29,17 +29,19 @@ void ModuleAnalysis::startFile() {
     writer->Int(M->size());
     writer->Key("function_summary");
     writer->StartArray();
-    writer->StartObject();
+    // writer->StartObject();
 }
 
 bool ModuleAnalysis::analyze() {
     startFile();
     for (Function &F : *M) {
         if (!F.isIntrinsic()) {
+            writer->StartObject();
             for (auto pass : analysisPassManager) {
                 pass->run(F);
                 pass->getResult(*writer);
             }
+            writer->EndObject();
         }
     }
     endFile();
@@ -47,7 +49,7 @@ bool ModuleAnalysis::analyze() {
 }
 
 void ModuleAnalysis::endFile() {
-    writer->EndObject();
+    // writer->EndObject();
     writer->EndArray();
     writer->EndObject();
 }

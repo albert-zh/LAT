@@ -2,6 +2,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Analysis/LoopInfo.h>
+#include <llvm/IR/CFG.h>
 #include <PassDefinitions.h>
 #include <iostream>
 
@@ -11,7 +12,7 @@ using namespace rapidjson;
 
 bool SelectionCountPass::run(Function& F) {
     for (BasicBlock &BB : F) {
-        if (!BB.getSingleSuccessor()) {
+        if (succ_size(&BB) > 1) {
             SelectionCount++;
         }
     }

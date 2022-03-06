@@ -9,11 +9,12 @@ private:
     std::vector<FunctionAnalysisBase*> analysisPassManager;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> *writer;
 
+    void endFile();
+    void startFile();
+
 public:
     void init(llvm::Module *M);
     void addPass(FunctionAnalysisBase* analysisPass);
-    void startFile();
     bool analyze();
-    void endFile();
     void emitResult();
 };

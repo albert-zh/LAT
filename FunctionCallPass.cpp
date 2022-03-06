@@ -14,7 +14,7 @@ bool FunctionCallPass::run(Function& F) {
         for (Instruction &I : BB) {
             if (CallInst *CallI = static_cast<CallInst*>(&I)) {
                 if (CallI->getCalledFunction())
-                    callees.push_back(CallI->getCalledFunction()->getName().str());
+                    callees.insert(CallI->getCalledFunction()->getName().str());
             }
         }
     }

@@ -17,35 +17,35 @@ using namespace rapidjson;
 
 static ManagedStatic<LLVMContext> GlobalContext;
 
-static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("Input file name (default to llvm ir)"), cl::Required);
+static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("Input file name (default to llvm ir)\n"), cl::Required);
 
-static cl::opt<std::string> InputFileFormat(cl::Positional, cl::desc("format of input file (C, C++, go, rust)"), cl::Optional);
+static cl::opt<std::string> InputFileFormat(cl::Positional, cl::desc("format of input file (C)\n"), cl::Optional);
 
 static cl::opt<bool> DisableCalleeCount("disable-callee-count", cl::Hidden,
-                                        cl::desc("Disable callee count anslysis"),
+                                        cl::desc("Disable callee count anslysis\n"),
                                         cl::init(false));
 
 static cl::opt<bool> DisableBranchCount("disable-branch-count", cl::Hidden,
-                                        cl::desc("Disable callee count anslysis"),
+                                        cl::desc("Disable callee count anslysis\n"),
                                         cl::init(false));
 
 static cl::opt<bool> DisableLoopCount("disable-loop-count", cl::Hidden,
-                                        cl::desc("Disable callee count anslysis"),
+                                        cl::desc("Disable callee count anslysis\n"),
                                         cl::init(false));
 
 static cl::opt<bool> DisableBBCount("disable-BB-count", cl::Hidden,
-                                        cl::desc("Disable callee count anslysis"),
+                                        cl::desc("Disable callee count anslysis\n"),
                                         cl::init(false));
 
 static cl::opt<bool> DisableFunctionName("disable-function-name", cl::Hidden,
-                                        cl::desc("Disable callee count anslysis"),
+                                        cl::desc("Disable callee count anslysis\n"),
                                         cl::init(false));
 
 int main(int argc, char **argv) {
     //  parse arguments
     cl::ParseCommandLineOptions(argc, argv);
     SMDiagnostic Err;
-    std::string fileName;
+    std::string fileName = InputFilename;
 
     if (InputFileFormat.compare("C") == 0) {
         std::string command("clang -S -emit-llvm " );
